@@ -7,7 +7,19 @@ import (
 
 var errCrash = errors.New("crash")
 
+type PaddingType int
+
+const (
+	PaddingTypeNone PaddingType = iota
+	PaddingTypePKCS5
+	PaddingTypePKCS7
+)
+
 func ECBEncrypt(origData, key []byte) (encryptedData []byte, err error) {
+	return ECBEncryptEx(origData, key, PaddingTypePKCS7)
+}
+
+func ECBEncryptEx(origData, key []byte, paddingType PaddingType) (encryptedData []byte, err error) {
 	defer func() {
 		if errR := recover(); errR != nil {
 			err = errCrash
@@ -19,7 +31,17 @@ func ECBEncrypt(origData, key []byte) (encryptedData []byte, err error) {
 	}
 
 	ecb := NewECBEncryptor(block)
-	origData = PKCS5Padding(origData, block.BlockSize())
+
+	switch paddingType {
+	case PaddingTypePKCS5:
+		origData = PKCS5Padding(origData)
+	case PaddingTypePKCS7:
+		origData = PKCS7Padding(origData, block.BlockSize())
+	case PaddingTypeNone:
+		fallthrough
+	default:
+	}
+
 	encryptedData = make([]byte, len(origData))
 	ecb.CryptBlocks(encryptedData, origData)
 
@@ -27,6 +49,10 @@ func ECBEncrypt(origData, key []byte) (encryptedData []byte, err error) {
 }
 
 func ECBDecrypt(encryptedData, key []byte) (origData []byte, err error) {
+	return ECBDecryptEx(encryptedData, key, PaddingTypePKCS7)
+}
+
+func ECBDecryptEx(encryptedData, key []byte, paddingType PaddingType) (origData []byte, err error) {
 	defer func() {
 		if errR := recover(); errR != nil {
 			err = errCrash
@@ -41,7 +67,15 @@ func ECBDecrypt(encryptedData, key []byte) (origData []byte, err error) {
 	ecb := NewECBDecrypter(block)
 	origData = make([]byte, len(encryptedData))
 	ecb.CryptBlocks(origData, encryptedData)
-	origData, err = PKCS5UnPadding(origData)
+	switch paddingType {
+	case PaddingTypePKCS5:
+		origData, err = PKCS5UnPadding(origData)
+	case PaddingTypePKCS7:
+		origData, err = PKCS7UnPadding(origData)
+	case PaddingTypeNone:
+		fallthrough
+	default:
+	}
 
 	return
 }
